@@ -1,0 +1,55 @@
+name: AI情報 Discord通知
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # 毎時00分（UTC）
+  workflow_dispatch:
+    inputs:
+      force_notify:
+        description: '強制通知する（テスト用）'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  check-ai-news:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python 3.12 をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: ライブラリをインストール
+        run: pip install -r requirements.txt
+
+      - name: AI情報チェックを実行
+        env:
+          DISCORD_WEBHOOK_DOMESTIC:      ${{ secrets.DISCORD_WEBHOOK_DOMESTIC }}
+          DISCORD_WEBHOOK_HACKERNEWS:    ${{ secrets.DISCORD_WEBHOOK_HACKERNEWS }}
+          DISCORD_WEBHOOK_INTERNATIONAL: ${{ secrets.DISCORD_WEBHOOK_INTERNATIONAL }}
+        run: |
+          if [ "${{ github.event.inputs.force_notify }}" = "true" ]; then
+            python main.py run --force-notify
+          else
+            python main.py run
+          fi
+
+      - name: seenデータをコミット・プッシュ
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "変更なし。コミットをスキップします。"
+          else
+            git commit -m "chore: seenデータ更新 [skip ci]"
+            git push
+          fi
